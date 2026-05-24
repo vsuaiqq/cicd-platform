@@ -1,0 +1,6 @@
+.env
+.env.*
+!.env.example
+client/.env
+docker/vault/tokens/*.env
+test-repo

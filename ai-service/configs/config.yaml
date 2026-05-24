@@ -1,0 +1,7 @@
+server:
+  http_port: 8086
+  grpc_port: 50053
+
+llm:
+  max_tokens: 1024
+  timeout: 90s

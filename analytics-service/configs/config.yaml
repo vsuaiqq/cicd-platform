@@ -1,0 +1,21 @@
+kafka:
+  brokers:
+    - kafka:9092
+  run_events_topic: pipeline.run-events
+  job_results_topic: pipeline.job-results
+  client_id: analytics
+  runs_group_id: analytics-runs
+  jobs_group_id: analytics-jobs
+
+server:
+  grpc_port: 50054
+  http_port: 8087
+
+clickhouse:
+  addr: "clickhouse:9000"
+  database: "default"
+  username: "default"
+  max_open_conns: 10
+  max_idle_conns: 5
+  conn_max_lifetime: 5m
+  dial_timeout: 10s

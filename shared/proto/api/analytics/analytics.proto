@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package analytics;
+
+option go_package = "github.com/vsuaiqq/cicd/shared/proto/gen/analytics";
+
+service AnalyticsService {
+
+  rpc GetDashboard(DashboardRequest) returns (DashboardResponse);
+}
+
+message DashboardRequest {
+  string project_id = 1;
+  string period     = 2;
+}
+
+
+message DailyPoint {
+  string date    = 1;
+  int32  total   = 2;
+  int32  success = 3;
+  int32  failed  = 4;
+}
+
+
+message JobStat {
+  string job_name         = 1;
+  int32  total_runs       = 2;
+  double failure_rate     = 3;
+  double avg_duration_sec = 4;
+  double avg_attempts     = 5;
+}
+
+message DashboardResponse {
+  int64  total_runs        = 1;
+  int64  success_count     = 2;
+  int64  failed_count      = 3;
+  int64  cancelled_count   = 4;
+  double success_rate      = 5;
+  double avg_duration_sec  = 6;
+  double p50_duration_sec  = 7;
+  double p95_duration_sec  = 8;
+
+  repeated DailyPoint trend           = 9;
+
+  repeated JobStat    top_failing_jobs = 10;
+
+  repeated JobStat    top_slow_jobs    = 11;
+
+  repeated JobStat    flaky_jobs       = 12;
+}

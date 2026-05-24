@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package ai;
+
+option go_package = "github.com/vsuaiqq/cicd/shared/proto/gen/ai";
+
+service AIService {
+  rpc AnalyzeFailure(AnalyzeFailureRequest) returns (AnalyzeFailureResponse);
+  rpc GeneratePipeline(GeneratePipelineRequest) returns (GeneratePipelineResponse);
+}
+
+
+message StepContext {
+  string name       = 1;
+  string status     = 2;
+  int32  exit_code  = 3;
+  string log_output = 4;
+}
+
+message AnalyzeFailureRequest {
+  string              job_name      = 1;
+  string              job_status    = 2;
+  string              pipeline_yaml = 3;
+  repeated StepContext steps        = 4;
+}
+
+message AnalyzeFailureResponse {
+  string          summary        = 1;
+  string          root_cause     = 2;
+  string          fix            = 3;
+  repeated string relevant_lines = 4;
+}
+
+message GeneratePipelineRequest {
+  string description = 1;
+}
+
+message GeneratePipelineResponse {
+  string yaml = 1;
+}

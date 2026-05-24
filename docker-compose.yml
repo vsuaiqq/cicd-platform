@@ -1,0 +1,443 @@
+
+x-vault-base: &vault-base
+  VAULT_ADDR: http://vault:8200
+  VAULT_MOUNT: secret
+  VAULT_KV_PREFIX: cicd
+
+services:
+  vault:
+    image: hashicorp/vault:1.20
+    cap_add:
+      - IPC_LOCK
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_DEV_ROOT_TOKEN:-dev-root-token}
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+    ports:
+      - "8200:8200"
+    command: server -dev
+    healthcheck:
+      test: ["CMD-SHELL", "VAULT_ADDR=http://127.0.0.1:8200 vault status"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  vault-init:
+    image: hashicorp/vault:1.20
+    depends_on:
+      vault: { condition: service_healthy }
+    env_file:
+      - .env
+    environment:
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: ${VAULT_DEV_ROOT_TOKEN:-dev-root-token}
+    volumes:
+      - ./docker/vault/init.sh:/init.sh:ro
+      - ./docker/vault/policies:/policies:ro
+      - ./docker/vault/tokens:/tokens
+    entrypoint: ["/bin/sh", "/init.sh"]
+    restart: "no"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.7.0
+    hostname: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_log:/var/lib/zookeeper/log
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  kafka:
+    image: confluentinc/cp-kafka:7.7.0
+    hostname: kafka
+    depends_on:
+      zookeeper: { condition: service_healthy }
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENERS: PLAINTEXT://:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: auth-service/Dockerfile
+      args:
+        CACHEBUST: ${CACHEBUST:-1}
+    depends_on:
+      vault-init: { condition: service_completed_successfully }
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    env_file:
+      - docker/vault/tokens/auth-service.env
+    environment:
+      <<: *vault-base
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - ./auth-service/configs/config.yaml:/config/config.yaml:ro
+    command: ["-config", "/config/config.yaml"]
+    ports:
+      - "50051:50051"
+      - "8082:8082"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8082/readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  projects-service:
+    build:
+      context: .
+      dockerfile: projects-service/Dockerfile
+    depends_on:
+      vault-init: { condition: service_completed_successfully }
+      postgres: { condition: service_healthy }
+    env_file:
+      - docker/vault/tokens/projects-service.env
+    environment:
+      <<: *vault-base
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - ./projects-service/configs/config.yaml:/config/config.yaml:ro
+    command: ["-config", "/config/config.yaml"]
+    ports:
+      - "50052:50052"
+      - "8084:8084"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8084/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  orchestrator-service:
+    build:
+      context: .
+      dockerfile: orchestrator-service/Dockerfile
+    depends_on:
+      vault-init: { condition: service_completed_successfully }
+      kafka: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      projects-service: { condition: service_healthy }
+    env_file:
+      - docker/vault/tokens/orchestrator-service.env
+    environment:
+      <<: *vault-base
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - ./orchestrator-service/configs/config.yaml:/config/config.yaml:ro
+    command: ["-config", "/config/config.yaml"]
+    ports:
+      - "8081:8081"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8081/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  git-gateway-service:
+    build:
+      context: .
+      dockerfile: git-gateway-service/Dockerfile
+    depends_on:
+      kafka: { condition: service_healthy }
+      projects-service: { condition: service_healthy }
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - ./git-gateway-service/configs/config.yaml:/config/config.yaml:ro
+    command: ["-config", "/config/config.yaml"]
+    ports:
+      - "8083:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  runner-service:
+    build:
+      context: .
+      dockerfile: runner-service/Dockerfile
+    depends_on:
+      kafka: { condition: service_healthy }
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - ./runner-service/configs/config.yaml:/config/config.yaml:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/cicd-runner:/tmp/cicd-runner
+      - cicd_artifacts:/var/cicd/artifacts
+      - cicd_cache:/var/cicd/cache
+    command: ["-config", "/config/config.yaml"]
+    ports:
+      - "8085:8085"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8085/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  ai-service:
+    build:
+      context: .
+      dockerfile: ai-service/Dockerfile
+    depends_on:
+      vault-init: { condition: service_completed_successfully }
+    env_file:
+      - docker/vault/tokens/ai-service.env
+    environment:
+      <<: *vault-base
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - ./ai-service/configs/config.yaml:/config/config.yaml:ro
+    command: ["-config", "/config/config.yaml"]
+    ports:
+      - "50053:50053"
+      - "8086:8086"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8086/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3-alpine
+    environment:
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required}
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:8123/ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
+
+  analytics-service:
+    build:
+      context: .
+      dockerfile: analytics-service/Dockerfile
+    depends_on:
+      vault-init: { condition: service_completed_successfully }
+      kafka: { condition: service_healthy }
+      clickhouse: { condition: service_healthy }
+    env_file:
+      - docker/vault/tokens/analytics-service.env
+    environment:
+      <<: *vault-base
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - ./analytics-service/configs/config.yaml:/config/config.yaml:ro
+    command: ["-config", "/config/config.yaml"]
+    ports:
+      - "50054:50054"
+      - "8087:8087"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8087/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
+    depends_on:
+      vault-init: { condition: service_completed_successfully }
+      auth-service: { condition: service_healthy }
+      projects-service: { condition: service_healthy }
+      orchestrator-service: { condition: service_healthy }
+      ai-service: { condition: service_healthy }
+      analytics-service: { condition: service_started }
+    env_file:
+      - docker/vault/tokens/api-gateway.env
+    environment:
+      <<: *vault-base
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - ./api-gateway/configs/config.yaml:/config/config.yaml:ro
+    command: ["-config", "/config/config.yaml"]
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8080/readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  tempo:
+    profiles: [observability]
+    image: grafana/tempo:2.3.1
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./docker/configs/tempo/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo_data:/var/tempo
+    ports:
+      - "3200:3200"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:3200/ready || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  otel-collector:
+    profiles: [observability]
+    image: otel/opentelemetry-collector-contrib:0.109.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./docker/configs/otel-collector/config.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "8888:8888"
+      - "8889:8889"
+    depends_on:
+      tempo: { condition: service_healthy }
+
+  loki:
+    profiles: [observability]
+    image: grafana/loki:2.9.4
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki_data:/loki
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:3100/ready || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  promtail:
+    profiles: [observability]
+    image: grafana/promtail:2.9.4
+    depends_on:
+      loki: { condition: service_healthy }
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ./docker/configs/promtail/promtail.yaml:/etc/promtail/promtail.yaml:ro
+    command: -config.file=/etc/promtail/promtail.yaml
+
+  prometheus:
+    profiles: [observability]
+    image: prom/prometheus:v2.53.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yaml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    volumes:
+      - ./docker/configs/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      otel-collector: { condition: service_started }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:9090/-/healthy || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  grafana:
+    profiles: [observability]
+    image: grafana/grafana:11.2.0
+    depends_on:
+      loki: { condition: service_healthy }
+      tempo: { condition: service_healthy }
+      prometheus: { condition: service_healthy }
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_HTTP_PORT: 3000
+      GF_FEATURE_TOGGLES_ENABLE: traceqlEditor
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/configs/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  zookeeper_data:
+  zookeeper_log:
+  kafka_data:
+  cicd_artifacts:
+  cicd_cache:
+  clickhouse_data:
+  loki_data:
+  grafana_data:
+  tempo_data:
+  prometheus_data:

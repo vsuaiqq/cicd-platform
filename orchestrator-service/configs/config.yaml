@@ -1,0 +1,25 @@
+kafka:
+  brokers:
+    - kafka:9092
+  input_topic: git-events
+  jobs_topic: pipeline.jobs
+  job_results_topic: pipeline.job-results
+  cancel_jobs_topic: pipeline.cancel-jobs
+  run_events_topic: pipeline.run-events
+  client_id: orchestrator
+  group_id: orchestrator
+  results_group_id: orchestrator-results
+
+server:
+  port: 8081
+
+postgres:
+  max_open_conns: 10
+  max_idle_conns: 5
+  conn_max_lifetime: 5m
+  conn_max_idle_time: 5m
+  connect_timeout: 10s
+
+projects:
+  grpc_address: "projects-service:50052"
+  timeout: 10s

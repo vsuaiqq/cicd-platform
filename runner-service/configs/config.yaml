@@ -1,0 +1,16 @@
+kafka:
+  brokers:
+    - kafka:9092
+  jobs_topic: pipeline.jobs
+  job_results_topic: pipeline.job-results
+  cancel_jobs_topic: pipeline.cancel-jobs
+  client_id: runner
+  group_id: runner
+
+runner:
+  work_dir: /tmp/cicd-runner
+  max_concurrent: 4
+  docker_socket: /var/run/docker.sock
+  http_port: 8085
+  artifact_dir: /var/cicd/artifacts
+  cache_dir: /var/cicd/cache

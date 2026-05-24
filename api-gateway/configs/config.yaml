@@ -1,0 +1,22 @@
+server:
+  port: 8080
+
+auth_service:
+  grpc_address: "auth-service:50051"
+  timeout: 10s
+
+projects_service:
+  grpc_address: "projects-service:50052"
+  timeout: 15s
+
+orchestrator_service:
+  base_url: "http://orchestrator-service:8081"
+  timeout: 15s
+
+ai_service:
+  grpc_address: "ai-service:50053"
+  timeout: 120s
+
+analytics_service:
+  grpc_address: "analytics-service:50054"
+  timeout: 10s

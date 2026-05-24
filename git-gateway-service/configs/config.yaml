@@ -1,0 +1,12 @@
+kafka:
+  brokers:
+    - kafka:9092
+  output_topic: git-events
+  client_id: git-gateway
+
+server:
+  port: 8080
+
+projects:
+  grpc_address: "projects-service:50052"
+  timeout: 10s

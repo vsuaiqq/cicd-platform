@@ -1,0 +1,283 @@
+syntax = "proto3";
+
+package projects;
+
+option go_package = "github.com/vsuaiqq/cicd/shared/proto/gen/projects";
+
+service ProjectsService {
+  rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse);
+  rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
+  rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
+  rpc VerifyConnection(VerifyConnectionRequest) returns (VerifyConnectionResponse);
+  rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse);
+  rpc UpdateProject(UpdateProjectRequest) returns (UpdateProjectResponse);
+  rpc Health(HealthRequest) returns (HealthResponse);
+
+  rpc GetEnvVars(GetEnvVarsRequest) returns (GetEnvVarsResponse);
+  rpc UpdateEnvVars(UpdateEnvVarsRequest) returns (UpdateEnvVarsResponse);
+
+  rpc GetPipelineYAML(GetPipelineYAMLRequest) returns (GetPipelineYAMLResponse);
+  rpc SetPipelineYAML(SetPipelineYAMLRequest) returns (SetPipelineYAMLResponse);
+
+
+  rpc ListSecrets(ListSecretsRequest) returns (ListSecretsResponse);
+  rpc SetSecret(SetSecretRequest) returns (SetSecretResponse);
+  rpc DeleteSecret(DeleteSecretRequest) returns (DeleteSecretResponse);
+
+
+  rpc GetProjectInternal(GetProjectInternalRequest) returns (GetProjectInternalResponse);
+
+
+  rpc ListMembers(ListMembersRequest) returns (ListMembersResponse);
+  rpc InviteMember(InviteMemberRequest) returns (InviteMemberResponse);
+  rpc UpdateMemberRole(UpdateMemberRoleRequest) returns (UpdateMemberRoleResponse);
+  rpc RemoveMember(RemoveMemberRequest) returns (RemoveMemberResponse);
+}
+
+
+message EnvVar {
+  string key   = 1;
+  string value = 2;
+}
+
+
+message CreateProjectRequest {
+  string user_id = 1;
+  string name = 2;
+  string repository_url = 3;
+  string default_branch = 4;
+}
+
+message CreateProjectResponse {
+  string id = 1;
+  string name = 2;
+  string repo_url = 3;
+  string default_branch = 4;
+  string public_key = 5;
+  string webhook_secret = 6;
+  string webhook_url = 7;
+  string status = 8;
+  string owner_user_id = 9;
+}
+
+message GetProjectRequest {
+  string user_id = 1;
+  string project_id = 2;
+}
+
+message ListProjectsRequest {
+  string user_id = 1;
+}
+
+message ListProjectsResponse {
+  repeated ProjectSummary projects = 1;
+}
+
+message ProjectSummary {
+  string id = 1;
+  string name = 2;
+  string repo_url = 3;
+  string default_branch = 4;
+  string status = 5;
+}
+
+message GetProjectResponse {
+  string id = 1;
+  string name = 2;
+  string repo_url = 3;
+  string default_branch = 4;
+  string public_key = 5;
+  string webhook_secret = 6;
+  string webhook_url = 7;
+  string status = 8;
+  string owner_user_id = 9;
+}
+
+message VerifyConnectionRequest {
+  string user_id = 1;
+  string project_id = 2;
+}
+
+message VerifyConnectionResponse {
+  bool success = 1;
+  string status = 2;
+  string error = 3;
+}
+
+message DeleteProjectRequest {
+  string user_id = 1;
+  string project_id = 2;
+}
+
+message DeleteProjectResponse {}
+
+message UpdateProjectRequest {
+  string user_id       = 1;
+  string project_id    = 2;
+  string name          = 3;
+  string default_branch = 4;
+}
+
+message UpdateProjectResponse {
+  string id             = 1;
+  string name           = 2;
+  string repo_url       = 3;
+  string default_branch = 4;
+  string public_key     = 5;
+  string webhook_secret = 6;
+  string webhook_url    = 7;
+  string status         = 8;
+  string owner_user_id  = 9;
+}
+
+message GetEnvVarsRequest {
+  string user_id    = 1;
+  string project_id = 2;
+}
+
+message GetEnvVarsResponse {
+  repeated EnvVar vars = 1;
+}
+
+message UpdateEnvVarsRequest {
+  string user_id    = 1;
+  string project_id = 2;
+  repeated EnvVar vars = 3;
+}
+
+message UpdateEnvVarsResponse {}
+
+message GetPipelineYAMLRequest {
+  string user_id    = 1;
+  string project_id = 2;
+}
+
+message GetPipelineYAMLResponse {
+
+  string yaml = 1;
+}
+
+message SetPipelineYAMLRequest {
+  string user_id    = 1;
+  string project_id = 2;
+
+  string yaml = 3;
+}
+
+message SetPipelineYAMLResponse {}
+
+
+
+message SecretMeta {
+  string key        = 1;
+  string updated_at = 2;
+}
+
+message ListSecretsRequest {
+  string user_id    = 1;
+  string project_id = 2;
+}
+
+message ListSecretsResponse {
+  repeated SecretMeta secrets = 1;
+}
+
+message SetSecretRequest {
+  string user_id    = 1;
+  string project_id = 2;
+  string key        = 3;
+  string value      = 4;
+}
+
+message SetSecretResponse {}
+
+message DeleteSecretRequest {
+  string user_id    = 1;
+  string project_id = 2;
+  string key        = 3;
+}
+
+message DeleteSecretResponse {}
+
+
+
+message SecretKV {
+  string key   = 1;
+  string value = 2;
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  bool healthy = 1;
+  string status = 2;
+}
+
+
+
+message ProjectMember {
+  string user_id      = 1;
+  string email        = 2;
+  string display_name = 3;
+  string role         = 4;
+  string invited_by   = 5;
+  string created_at   = 6;
+}
+
+message ListMembersRequest {
+  string user_id    = 1;
+  string project_id = 2;
+}
+
+message ListMembersResponse {
+  repeated ProjectMember members = 1;
+  string requester_role = 2;
+  string owner_user_id  = 3;
+}
+
+message InviteMemberRequest {
+  string owner_user_id        = 1;
+  string project_id           = 2;
+  string invitee_user_id      = 3;
+  string invitee_email        = 4;
+  string invitee_display_name = 5;
+  string role                 = 6;
+}
+
+message InviteMemberResponse {
+  ProjectMember member = 1;
+}
+
+message UpdateMemberRoleRequest {
+  string owner_user_id  = 1;
+  string project_id     = 2;
+  string target_user_id = 3;
+  string role           = 4;
+}
+
+message UpdateMemberRoleResponse {
+  ProjectMember member = 1;
+}
+
+message RemoveMemberRequest {
+  string owner_user_id  = 1;
+  string project_id     = 2;
+  string target_user_id = 3;
+}
+
+message RemoveMemberResponse {}
+
+
+message GetProjectInternalRequest {
+  string project_id = 1;
+}
+
+message GetProjectInternalResponse {
+  string id             = 1;
+  string repo_url       = 2;
+  string webhook_secret = 3;
+  string ssh_key        = 4;
+  repeated EnvVar  env_vars              = 5;
+  string           pipeline_yaml_override = 6;
+  repeated SecretKV secrets              = 7;
+}
