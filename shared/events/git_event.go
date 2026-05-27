@@ -16,7 +16,9 @@ type GitEvent struct {
 type PlatformType string
 
 const (
-	GitHub PlatformType = "github"
+	GitHub    PlatformType = "github"
+	Bitbucket PlatformType = "bitbucket"
+	GitVerse  PlatformType = "gitverse"
 )
 
 type EventType string

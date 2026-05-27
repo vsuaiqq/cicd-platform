@@ -2,7 +2,6 @@
 
 .PHONY: help setup vault-seed seed up down start restart status health wait logs ui observability build
 
-VAULT_SERVICES := auth-service projects-service orchestrator-service analytics-service ai-service api-gateway
 TOKEN_DIR := docker/vault/tokens
 
 help: ## Show available commands
@@ -15,27 +14,23 @@ help: ## Show available commands
 	@echo "Frontend:     make ui   (http://localhost:5173)"
 	@echo "API:          http://localhost:8080"
 
-setup: ## Create .env and Vault token stubs if missing
+setup: ## Create .env and token dir if missing
 	@test -f .env || cp .env.example .env
 	@mkdir -p $(TOKEN_DIR)
-	@for s in $(VAULT_SERVICES); do \
-		if [ ! -f "$(TOKEN_DIR)/$$s.env" ]; then \
-			echo "VAULT_TOKEN=$${VAULT_DEV_ROOT_TOKEN:-dev-root-token}" > "$(TOKEN_DIR)/$$s.env"; \
-		fi; \
-	done
 
-vault-seed: setup ## Seed Vault secrets from .env (run after changing secrets)
+vault-seed: setup ## Seed Vault secrets from .env and refresh service tokens
+	docker compose up -d vault
 	docker compose run --rm vault-init
 
 seed: vault-seed ## Alias for vault-seed
 
-up: setup ## Start all backend services (Docker)
-	docker compose up -d --build
+up: vault-seed ## Start all backend services (Docker)
+	docker compose up -d --build --force-recreate
 
 down: ## Stop all services
 	docker compose down
 
-start: setup vault-seed up wait health ## Full first-time startup: setup → Vault → Docker → health check
+start: up wait health ## Full startup: Vault seed → Docker → health check
 	@echo ""
 	@echo "Backend is up."
 	@echo "  API gateway   http://localhost:8080"

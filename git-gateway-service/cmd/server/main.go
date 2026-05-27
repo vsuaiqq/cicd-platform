@@ -113,7 +113,12 @@ func setupRouter(projectsClient *projects.Client, publisher *kafka.GitEventPubli
 		r.Post("/github/{projectID}", httpHandler.WebhookHandler(
 			projectsClient, publisher, httpHandler.NewGitHubProcessor(),
 		))
-
+		r.Post("/bitbucket/{projectID}", httpHandler.WebhookHandler(
+			projectsClient, publisher, httpHandler.NewBitbucketProcessor(),
+		))
+		r.Post("/gitverse/{projectID}", httpHandler.WebhookHandler(
+			projectsClient, publisher, httpHandler.NewGitVerseProcessor(),
+		))
 	})
 
 	return router

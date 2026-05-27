@@ -35,7 +35,8 @@ func BootstrapSecrets(ctx context.Context, serviceName string) error {
 	}
 
 	for _, path := range paths {
-		if err := mergeVaultPath(ctx, client, mount, path); err != nil {
+		optional := serviceName != "" && path == prefix+"/"+serviceName
+		if err := mergeVaultPath(ctx, client, mount, path, optional); err != nil {
 			return fmt.Errorf("vault read %s: %w", path, err)
 		}
 	}
@@ -78,10 +79,10 @@ func newVaultClient(addr string) (*vault.Client, error) {
 	return nil, fmt.Errorf("vault auth required: set VAULT_TOKEN or VAULT_ROLE_ID+VAULT_SECRET_ID")
 }
 
-func mergeVaultPath(ctx context.Context, client *vault.Client, mount, path string) error {
+func mergeVaultPath(ctx context.Context, client *vault.Client, mount, path string, optional404 bool) error {
 	secret, err := client.KVv2(mount).Get(ctx, path)
 	if err != nil {
-		if isOptionalPathError(err) {
+		if optional404 && isNotFoundError(err) {
 			return nil
 		}
 		return err
@@ -106,13 +107,10 @@ func mergeVaultPath(ctx context.Context, client *vault.Client, mount, path strin
 	return nil
 }
 
-func isOptionalPathError(err error) bool {
+func isNotFoundError(err error) bool {
 	if err == nil {
 		return false
 	}
 	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "404") ||
-		strings.Contains(msg, "not found") ||
-		strings.Contains(msg, "403") ||
-		strings.Contains(msg, "permission denied")
+	return strings.Contains(msg, "404") || strings.Contains(msg, "not found")
 }
