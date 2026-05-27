@@ -87,7 +87,21 @@ func parseBitbucketPush(payload []byte) (*events.GitEvent, error) {
 		return nil, fmt.Errorf("bitbucket: push payload missing branch commit")
 	}
 
-	repoURL := bitbucketSSHURL(body.Repository.Links.Clone)
+	repoURL := ""
+	for _, c := range body.Repository.Links.Clone {
+		if c.Name == "ssh" && c.Href != "" {
+			repoURL = c.Href
+			break
+		}
+	}
+	if repoURL == "" {
+		for _, c := range body.Repository.Links.Clone {
+			if strings.HasPrefix(c.Href, "git@") {
+				repoURL = c.Href
+				break
+			}
+		}
+	}
 	if repoURL == "" && body.Repository.FullName != "" {
 		repoURL = "git@bitbucket.org:" + body.Repository.FullName + ".git"
 	}
@@ -109,21 +123,4 @@ func parseBitbucketPush(payload []byte) (*events.GitEvent, error) {
 		CommitSHA: commitSHA,
 		Author:    &events.User{Login: author},
 	}, nil
-}
-
-func bitbucketSSHURL(clones []struct {
-	Name string `json:"name"`
-	Href string `json:"href"`
-}) string {
-	for _, c := range clones {
-		if c.Name == "ssh" && c.Href != "" {
-			return c.Href
-		}
-	}
-	for _, c := range clones {
-		if strings.HasPrefix(c.Href, "git@") {
-			return c.Href
-		}
-	}
-	return ""
 }
