@@ -63,6 +63,47 @@ func TestLoadBytes_rejectsEmptyJobs(t *testing.T) {
 	}
 }
 
+func TestLoadBytes_performanceGate(t *testing.T) {
+	data := []byte(`
+jobs:
+  load-test:
+    image: golang:1.25
+    steps:
+      - name: load
+        run: ./scripts/load-test.sh
+  performance-gate:
+    needs: [load-test]
+    performance_gate:
+      source_job: load-test
+      baseline:
+        min_samples: 3
+`)
+	pl, err := LoadBytes(data)
+	if err != nil {
+		t.Fatalf("LoadBytes: %v", err)
+	}
+	if !pl.Jobs["performance-gate"].IsPerformanceGate() {
+		t.Fatal("expected performance gate job")
+	}
+}
+
+func TestLoadBytes_rejectsGateWithoutNeed(t *testing.T) {
+	data := []byte(`
+jobs:
+  load-test:
+    steps:
+      - name: load
+        run: echo load
+  performance-gate:
+    performance_gate:
+      source_job: load-test
+`)
+	_, err := LoadBytes(data)
+	if err == nil {
+		t.Fatal("expected error when source job not in needs")
+	}
+}
+
 func TestBranchAllowed(t *testing.T) {
 	pl := &Pipeline{
 		On: &Trigger{

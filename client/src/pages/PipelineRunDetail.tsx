@@ -5,6 +5,7 @@ import { useAppSelector } from '../store'
 import {
   useApproveJobMutation,
   useCancelRunMutation,
+  useGetPerformanceGateResultQuery,
   useGetRunQuery,
   useRejectJobMutation,
 } from '../store/api/apiSlice'
@@ -26,6 +27,8 @@ import { Breadcrumb, RunDetailSkeleton, useToast } from '../components/ui'
 import { btnSecondary } from '../styles/theme'
 import { getRecentProjects } from '../lib/recentProjects'
 import { formatStatus } from '../lib/formatStatus'
+import { isPerformanceGateJob, parsePerformanceGateJobs } from '../lib/pipelineYaml'
+import { PerformanceGatePanel, PerformanceGateJobBadge } from '../components/PerformanceGatePanel'
 import { useI18n } from '../i18n'
 
 
@@ -80,6 +83,8 @@ const pipelineGraph = css({
   overflowX: 'auto',
   paddingBottom: 8,
   paddingTop: 2,
+  scrollBehavior: 'smooth',
+  WebkitOverflowScrolling: 'touch',
 })
 
 const pipelineConnector = css({
@@ -196,6 +201,10 @@ const stepList = css({
   borderRight: '1px solid var(--border-subtle)',
   width: 200,
   flexShrink: 0,
+  overflowY: 'auto',
+  minHeight: 0,
+  alignSelf: 'stretch',
+  scrollBehavior: 'smooth',
 })
 
 const stepListItem = css({
@@ -223,6 +232,7 @@ const logBody = css({
   maxHeight: 600,
   flex: 1,
   position: 'relative',
+  overflow: 'hidden',
 })
 
 const logOutput = css({
@@ -758,6 +768,9 @@ export default function PipelineRunDetail() {
 
   const wsRef             = useRef<WebSocket | null>(null)
   const logRef            = useRef<HTMLDivElement>(null)
+  const pipelineGraphRef  = useRef<HTMLDivElement>(null)
+  const jobNodeRefs       = useRef<Map<string, HTMLDivElement>>(new Map())
+  const stepItemRefs      = useRef<Map<number, HTMLDivElement>>(new Map())
   const retryCountRef     = useRef(0)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -774,6 +787,81 @@ export default function PipelineRunDetail() {
     if (!projectId) return null
     return getRecentProjects().find(p => p.id === projectId)?.name ?? null
   }, [projectId])
+
+  const gateJobs = useMemo(
+    () => parsePerformanceGateJobs(run?.pipeline_yaml),
+    [run?.pipeline_yaml],
+  )
+
+  const activeJobMeta = useMemo(() => {
+    const jobs = run?.jobs ?? []
+    return jobs.find((j) => j.id === selectedJob) ?? jobs[0] ?? null
+  }, [run?.jobs, selectedJob])
+
+  const isActiveGateJob = activeJobMeta ? isPerformanceGateJob(activeJobMeta.name, gateJobs) : false
+  const gateJobTerminal =
+    activeJobMeta?.status === 'success' || activeJobMeta?.status === 'failed'
+
+  const {
+    data: gateResult,
+    isLoading: gateLoading,
+    refetch: refetchGate,
+  } = useGetPerformanceGateResultQuery(
+    { runId: runId!, jobName: activeJobMeta?.name ?? '' },
+    {
+      skip: !runId || !token || !isActiveGateJob,
+      pollingInterval:
+        isActiveGateJob && activeJobMeta?.status === 'running' ? 1500 : 0,
+    },
+  )
+
+  useEffect(() => {
+    if (isActiveGateJob && gateJobTerminal) {
+      void refetchGate()
+    }
+  }, [
+    isActiveGateJob,
+    gateJobTerminal,
+    activeJobMeta?.status,
+    activeJobMeta?.finished_at,
+    refetchGate,
+  ])
+
+  const scrollJobIntoView = useCallback((jobId: string) => {
+    const node = jobNodeRefs.current.get(jobId)
+    if (!node) return
+    node.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+  }, [])
+
+  const scrollStepIntoView = useCallback((stepIndex: number) => {
+    const node = stepItemRefs.current.get(stepIndex)
+    if (!node) return
+    node.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [])
+
+  useEffect(() => {
+    stepItemRefs.current.clear()
+  }, [selectedJob])
+
+  useEffect(() => {
+    if (!selectedJob) return
+    scrollJobIntoView(selectedJob)
+  }, [selectedJob, scrollJobIntoView])
+
+  useEffect(() => {
+    scrollStepIntoView(selectedStep)
+  }, [selectedStep, selectedJob, scrollStepIntoView])
+
+  const selectJob = useCallback((jobId: string) => {
+    setSelectedJob(jobId)
+    setSelectedStep(0)
+    requestAnimationFrame(() => scrollJobIntoView(jobId))
+  }, [scrollJobIntoView])
+
+  const selectStep = useCallback((stepIndex: number) => {
+    setSelectedStep(stepIndex)
+    requestAnimationFrame(() => scrollStepIntoView(stepIndex))
+  }, [scrollStepIntoView])
 
 
 
@@ -1096,7 +1184,7 @@ export default function PipelineRunDetail() {
 
 
       {displayJobs.length > 0 && (
-        <div css={pipelineGraph}>
+        <div css={pipelineGraph} ref={pipelineGraphRef}>
           {displayJobs.map((job, idx) => (
             <div key={job.id} style={{ display: 'flex', alignItems: 'center' }}>
               {idx > 0 && (
@@ -1107,11 +1195,15 @@ export default function PipelineRunDetail() {
                 </div>
               )}
               <div
+                ref={(el) => {
+                  if (el) jobNodeRefs.current.set(job.id, el)
+                  else jobNodeRefs.current.delete(job.id)
+                }}
                 css={[jobNode, selectedJob === job.id && jobNodeActive]}
-                onClick={() => { setSelectedJob(job.id); setSelectedStep(0) }}
+                onClick={() => selectJob(job.id)}
                 role="button"
                 tabIndex={0}
-                onKeyDown={(e) => e.key === 'Enter' && setSelectedJob(job.id)}
+                onKeyDown={(e) => e.key === 'Enter' && selectJob(job.id)}
                 aria-pressed={selectedJob === job.id}
               >
 
@@ -1120,6 +1212,9 @@ export default function PipelineRunDetail() {
                 <div css={jobNodeHeader}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
                     <div css={jobNodeName}>{job.display_name || job.name}</div>
+                    {isPerformanceGateJob(job.name, gateJobs) && (
+                      <PerformanceGateJobBadge label={t.performanceGate.gateJobBadge} />
+                    )}
                     {(job.attempt ?? 1) > 1 && (
                       <span style={{ fontSize: '0.625rem', fontWeight: 700, padding: '1px 6px', borderRadius: 'var(--radius-full)', background: 'var(--warning-muted)', color: 'var(--warning)', fontFamily: 'ui-monospace, monospace', flexShrink: 0 }}>
                         ×{job.attempt ?? 1}
@@ -1251,6 +1346,15 @@ export default function PipelineRunDetail() {
             </div>
           )}
 
+          {isActiveGateJob && activeJobMeta && gateJobs[activeJobMeta.name] && (
+            <PerformanceGatePanel
+              config={gateJobs[activeJobMeta.name]}
+              result={gateResult}
+              loading={gateLoading}
+              jobStatus={activeJobMeta.status}
+              t={t}
+            />
+          )}
 
           {analyzing && <ThinkingPanel />}
 
@@ -1303,11 +1407,15 @@ export default function PipelineRunDetail() {
                 {activeJob.steps.map((step, i) => (
                   <div
                     key={step.index}
+                    ref={(el) => {
+                      if (el) stepItemRefs.current.set(i, el)
+                      else stepItemRefs.current.delete(i)
+                    }}
                     css={[stepListItem, selectedStep === i && stepListItemActive]}
-                    onClick={() => setSelectedStep(i)}
+                    onClick={() => selectStep(i)}
                     role="button"
                     tabIndex={0}
-                    onKeyDown={(e) => e.key === 'Enter' && setSelectedStep(i)}
+                    onKeyDown={(e) => e.key === 'Enter' && selectStep(i)}
                   >
                     <span style={{ color: statusColor(step.status), flexShrink: 0 }}>
                       {statusIcon(step.status)}

@@ -39,6 +39,7 @@ type Orchestrator struct {
 	cancelPub      CancelPublisher
 	runEventPub    RunEventPublisher
 	projectsClient pb.ProjectsServiceClient
+	perfGate       PerformanceGateEvaluator
 	hub            *orchWs.Hub
 }
 
@@ -48,6 +49,7 @@ func New(
 	cancelPub CancelPublisher,
 	runEventPub RunEventPublisher,
 	projectsClient pb.ProjectsServiceClient,
+	perfGate PerformanceGateEvaluator,
 	hub *orchWs.Hub,
 ) *Orchestrator {
 	return &Orchestrator{
@@ -56,6 +58,7 @@ func New(
 		cancelPub:      cancelPub,
 		runEventPub:    runEventPub,
 		projectsClient: projectsClient,
+		perfGate:       perfGate,
 		hub:            hub,
 	}
 }
@@ -136,7 +139,7 @@ func (o *Orchestrator) HandleGitEvent(ctx context.Context, event *sharedEvents.G
 		ProjectID: event.ProjectID,
 		Status:    db.StatusRunning,
 	})
-	return o.dispatchReadyJobs(ctx, run.ID, event.ProjectID, pl, jobMap, map[string]bool{}, info.sshKey, repoURL, event.CommitSHA, info.env, info.secrets)
+	return o.dispatchReadyJobs(ctx, run.ID, event.ProjectID, pl, jobMap, map[string]bool{}, info.sshKey, repoURL, event.CommitSHA, info.env, info.secrets, event.Branch, "", nil)
 }
 
 func (o *Orchestrator) HandleJobResult(ctx context.Context, result *sharedEvents.PipelineJobResult) error {
@@ -262,7 +265,7 @@ func (o *Orchestrator) HandleJobResult(ctx context.Context, result *sharedEvents
 				}
 
 				if dispatchErr := o.dispatchJob(ctx, result.RunID, run.ProjectID, dbJob, plJob, pl,
-					info.sshKey, run.RepoURL, run.CommitSHA, info.env, info.secrets,
+					info.sshKey, run.RepoURL, run.CommitSHA, run.Branch, info.env, info.secrets,
 					jobMap, nextAttempt); dispatchErr != nil {
 					logger.L().Error().Err(dispatchErr).Str("job", jobName).Msg("retry dispatch failed")
 				} else {
@@ -302,7 +305,7 @@ func (o *Orchestrator) HandleJobResult(ctx context.Context, result *sharedEvents
 		logger.L().Warn().Err(err).Str("project", run.ProjectID).Msg("could not get project info")
 		return nil
 	}
-	return o.dispatchReadyJobs(ctx, result.RunID, run.ProjectID, pl, jobMap, completed, info.sshKey, run.RepoURL, run.CommitSHA, info.env, info.secrets)
+	return o.dispatchReadyJobs(ctx, result.RunID, run.ProjectID, pl, jobMap, completed, info.sshKey, run.RepoURL, run.CommitSHA, info.env, info.secrets, run.Branch, jobName, result.PerformanceMetrics)
 }
 
 func (o *Orchestrator) dispatchReadyJobs(
@@ -315,6 +318,9 @@ func (o *Orchestrator) dispatchReadyJobs(
 	sshKey, repoURL, commitSHA string,
 	projectEnv map[string]string,
 	secrets map[string]string,
+	branch string,
+	completedJobName string,
+	completedMetrics []sharedEvents.PerformanceMetricValue,
 ) error {
 	for name, plJob := range pl.Jobs {
 		dbJob, ok := jobMap[name]
@@ -322,6 +328,20 @@ func (o *Orchestrator) dispatchReadyJobs(
 			continue
 		}
 		if !allCompleted(plJob.Needs, completed) {
+			continue
+		}
+
+		if plJob.IsPerformanceGate() {
+			if o.perfGate == nil {
+				logger.L().Error().Str("job", name).Msg("performance gate configured but analytics client unavailable")
+				_ = o.repo.UpdateJobStatus(ctx, dbJob.ID, db.StatusFailed)
+				o.skipDependents(ctx, runID, name, pl, jobMap)
+				o.finalizeRunIfComplete(ctx, runID, projectID)
+				continue
+			}
+			if err := o.runPerformanceGate(ctx, runID, projectID, branch, dbJob, plJob, completedJobName, completedMetrics); err != nil {
+				logger.L().Error().Err(err).Str("job", name).Msg("performance gate failed")
+			}
 			continue
 		}
 
@@ -337,7 +357,7 @@ func (o *Orchestrator) dispatchReadyJobs(
 			})
 			continue
 		}
-		if err := o.dispatchJob(ctx, runID, projectID, dbJob, plJob, pl, sshKey, repoURL, commitSHA, projectEnv, secrets, jobMap, 1); err != nil {
+		if err := o.dispatchJob(ctx, runID, projectID, dbJob, plJob, pl, sshKey, repoURL, commitSHA, branch, projectEnv, secrets, jobMap, 1); err != nil {
 			logger.L().Error().Err(err).Str("job", name).Msg("failed to dispatch job")
 		}
 	}
@@ -415,7 +435,7 @@ func (o *Orchestrator) ApproveJob(ctx context.Context, runID, jobID string) erro
 	_ = o.repo.UpdateJobStatus(ctx, dbJob.ID, db.StatusPending)
 	jobs, _ := o.repo.GetJobsByRun(ctx, runID)
 	jm := jobMapByName(jobs)
-	return o.dispatchJob(ctx, runID, run.ProjectID, dbJob, plJob, pl, info.sshKey, run.RepoURL, run.CommitSHA, info.env, info.secrets, jm, dbJob.Attempt)
+	return o.dispatchJob(ctx, runID, run.ProjectID, dbJob, plJob, pl, info.sshKey, run.RepoURL, run.CommitSHA, run.Branch, info.env, info.secrets, jm, dbJob.Attempt)
 }
 
 func (o *Orchestrator) RejectJob(ctx context.Context, runID, jobID string) error {
@@ -477,7 +497,7 @@ func (o *Orchestrator) dispatchJob(
 	dbJob *db.PipelineJob,
 	plJob *pipeline.Job,
 	pl *pipeline.Pipeline,
-	sshKey, repoURL, commitSHA string,
+	sshKey, repoURL, commitSHA, branch string,
 	projectEnv map[string]string,
 	secrets map[string]string,
 	jobMap map[string]*db.PipelineJob,
@@ -543,6 +563,7 @@ func (o *Orchestrator) dispatchJob(
 		ProjectID:         projectID,
 		JobID:             dbJob.ID,
 		JobName:           dbJob.Name,
+		Branch:            branch,
 		Image:             plJob.Image,
 		RepoURL:           repoURL,
 		CommitSHA:         commitSHA,
@@ -627,6 +648,33 @@ func jobMapByName(jobs []*db.PipelineJob) map[string]*db.PipelineJob {
 		m[j.Name] = j
 	}
 	return m
+}
+
+func (o *Orchestrator) finalizeRunIfComplete(ctx context.Context, runID, projectID string) {
+	jobs, err := o.repo.GetJobsByRun(ctx, runID)
+	if err != nil {
+		return
+	}
+	_, allDone, anyFailed := computeJobState(jobs)
+	if !allDone {
+		return
+	}
+	finalStatus := db.StatusSuccess
+	if anyFailed {
+		finalStatus = db.StatusFailed
+	}
+	_ = o.repo.UpdateRunStatus(ctx, runID, finalStatus)
+	o.hub.Broadcast(runID, orchWs.Event{
+		Type:            orchWs.EventRunUpdated,
+		RunID:           runID,
+		ProjectID:       projectID,
+		Status:          finalStatus,
+		RunFinishedAtMs: time.Now().UnixMilli(),
+	})
+	finishedRun, _ := o.repo.GetRun(ctx, runID)
+	if finishedRun != nil {
+		o.publishRunCompleted(ctx, finishedRun, finalStatus)
+	}
 }
 
 func computeJobState(jobs []*db.PipelineJob) (completed map[string]bool, allDone, anyFailed bool) {

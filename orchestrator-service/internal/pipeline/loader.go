@@ -39,9 +39,40 @@ func validate(p *Pipeline) error {
 				return fmt.Errorf("pipeline: job %q needs unknown job %q", name, need)
 			}
 		}
+		if job.IsPerformanceGate() {
+			if err := validatePerformanceGate(name, job, p.Jobs); err != nil {
+				return err
+			}
+			continue
+		}
 		if len(job.Steps) == 0 {
 			return fmt.Errorf("pipeline: job %q has no steps", name)
 		}
+	}
+	return nil
+}
+
+func validatePerformanceGate(name string, job *Job, allJobs map[string]*Job) error {
+	pg := job.PerformanceGate
+	if pg.SourceJob == "" {
+		return fmt.Errorf("pipeline: job %q performance_gate.source_job is required", name)
+	}
+	src, ok := allJobs[pg.SourceJob]
+	if !ok {
+		return fmt.Errorf("pipeline: job %q performance_gate.source_job %q not found", name, pg.SourceJob)
+	}
+	if src.IsPerformanceGate() {
+		return fmt.Errorf("pipeline: job %q cannot use performance gate job %q as source", name, pg.SourceJob)
+	}
+	hasNeed := false
+	for _, need := range job.Needs {
+		if need == pg.SourceJob {
+			hasNeed = true
+			break
+		}
+	}
+	if !hasNeed {
+		return fmt.Errorf("pipeline: job %q must list performance_gate.source_job %q in needs", name, pg.SourceJob)
 	}
 	return nil
 }

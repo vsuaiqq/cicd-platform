@@ -53,7 +53,7 @@ func (r *Repository) Migrate(ctx context.Context) error {
 			return fmt.Errorf("analytics migrate: %w", err)
 		}
 	}
-	return nil
+	return r.migratePerformanceTables(ctx)
 }
 
 type RunEvent struct {

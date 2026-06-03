@@ -5,6 +5,7 @@ type PipelineJobTask struct {
 	ProjectID string            `json:"project_id,omitempty"`
 	JobID     string            `json:"job_id"`
 	JobName   string            `json:"job_name"`
+	Branch    string            `json:"branch,omitempty"`
 	Image     string            `json:"image,omitempty"`
 	RepoURL   string            `json:"repo_url"`
 	CommitSHA string            `json:"commit_sha"`
@@ -45,16 +46,24 @@ type PipelineStep struct {
 	RetryMax        int    `json:"retry_max,omitempty"`
 }
 
+type PerformanceMetricValue struct {
+	Name  string  `json:"name"`
+	Value float64 `json:"value"`
+}
+
 type PipelineJobResult struct {
 	RunID         string       `json:"run_id"`
 	JobID         string       `json:"job_id"`
 	JobName       string       `json:"job_name,omitempty"`
 	ProjectID     string       `json:"project_id,omitempty"`
+	Branch        string       `json:"branch,omitempty"`
 	Status        string       `json:"status"`
 	AttemptNumber int          `json:"attempt_number,omitempty"`
 	Steps         []StepResult `json:"steps"`
 	StartedAt     int64        `json:"started_at"`
 	FinishedAt    int64        `json:"finished_at"`
+
+	PerformanceMetrics []PerformanceMetricValue `json:"performance_metrics,omitempty"`
 }
 
 type CancelJobEvent struct {

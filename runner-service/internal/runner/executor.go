@@ -52,6 +52,7 @@ func Execute(ctx context.Context, task *events.PipelineJobTask, baseWorkDir stri
 		JobID:         task.JobID,
 		JobName:       task.JobName,
 		ProjectID:     task.ProjectID,
+		Branch:        task.Branch,
 		AttemptNumber: task.AttemptNumber,
 		Status:        "success",
 		Steps:         make([]events.StepResult, 0, len(task.Steps)),
@@ -161,11 +162,9 @@ func Execute(ctx context.Context, task *events.PipelineJobTask, baseWorkDir stri
 				return fail()
 			}
 			var extractErr error
-			if image != "" {
-				extractErr = ExtractArtifactsDocker(ctx, repoDir, artPath, cfg.DockerSocket)
-			} else {
-				extractErr = ExtractArtifactsHost(repoDir, artPath)
-			}
+			// Archive paths live on the runner filesystem (bind mounts / named volumes).
+			// Nested docker run cannot reliably mount those paths from the host daemon.
+			extractErr = ExtractArtifactsHost(repoDir, artPath)
 			if extractErr != nil {
 				errMsg := fmt.Sprintf("artifact extract from job %q failed: %v", src.JobName, extractErr)
 				logger.L().Error().Err(extractErr).Str("job", src.JobName).Msg("artifact extract failed")
@@ -218,20 +217,23 @@ func Execute(ctx context.Context, task *events.PipelineJobTask, baseWorkDir stri
 
 	if cfg != nil && cfg.ArtifactDir != "" && len(task.ArtifactsUpload) > 0 {
 		artPath := ArtifactPath(cfg.ArtifactDir, task.RunID, task.JobID)
-		var saveErr error
-		if image != "" {
-			saveErr = SaveArtifactsDocker(ctx, repoDir, artPath, cfg.DockerSocket, task.ArtifactsUpload)
-		} else {
-			saveErr = SaveArtifactsHost(repoDir, artPath, task.ArtifactsUpload)
-		}
+		saveErr := SaveArtifactsHost(repoDir, artPath, task.ArtifactsUpload)
 		if saveErr != nil {
-			logger.L().Warn().Err(saveErr).Msg("artifact save failed (non-fatal)")
-		} else {
-			logger.L().Info().Str("path", artPath).Msg("artifacts saved")
+			errMsg := fmt.Sprintf("artifact save failed: %v", saveErr)
+			logger.L().Error().Err(saveErr).Str("path", artPath).Msg("artifact save failed")
+			result.Steps = append(result.Steps, events.StepResult{
+				Name:     "save artifacts",
+				Status:   "failed",
+				ExitCode: -1,
+				Output:   errMsg,
+			})
+			return fail()
 		}
+		logger.L().Info().Str("path", artPath).Msg("artifacts saved")
 	}
 
 	renumberSteps()
+	result.PerformanceMetrics = extractPerformanceMetrics(repoDir)
 	result.FinishedAt = time.Now().Unix()
 	return result
 }

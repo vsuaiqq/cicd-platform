@@ -1,5 +1,5 @@
 import { createApi } from '@reduxjs/toolkit/query/react'
-import type { DashboardData, Period } from '../../api/analytics'
+import type { DashboardData, Period, PerformanceGateResult } from '../../api/analytics'
 import type { PipelineRun } from '../../api/pipelines'
 import type {
   CreateProjectRequest,
@@ -21,7 +21,7 @@ const pipeline = '/api/v1/pipeline'
 export const apiSlice = createApi({
   reducerPath: 'api',
   baseQuery: apiBaseQuery,
-  tagTypes: ['ProjectList', 'Project', 'Runs', 'Run', 'EnvVars', 'Secrets', 'Members', 'PipelineYaml', 'Dashboard'],
+  tagTypes: ['ProjectList', 'Project', 'Runs', 'Run', 'EnvVars', 'Secrets', 'Members', 'PipelineYaml', 'Dashboard', 'PerformanceGate'],
 
   keepUnusedDataFor: 300,
 
@@ -225,6 +225,23 @@ export const apiSlice = createApi({
         { type: 'Dashboard', id: `${projectId}-${period}` },
       ],
     }),
+
+    getPerformanceGateResult: build.query<
+      PerformanceGateResult,
+      { runId: string; jobName: string }
+    >({
+      query: ({ runId, jobName }) => {
+        const params = new URLSearchParams({ run_id: runId, job_name: jobName })
+        return `/api/v1/analytics/performance-gate?${params}`
+      },
+      transformResponse: (r: PerformanceGateResult) => ({
+        ...r,
+        metrics: r.metrics ?? [],
+      }),
+      providesTags: (_r, _e, { runId, jobName }) => [
+        { type: 'PerformanceGate', id: `${runId}-${jobName}` },
+      ],
+    }),
   }),
 })
 
@@ -252,4 +269,5 @@ export const {
   useApproveJobMutation,
   useRejectJobMutation,
   useGetDashboardQuery,
+  useGetPerformanceGateResultQuery,
 } = apiSlice

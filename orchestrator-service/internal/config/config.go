@@ -7,6 +7,7 @@ type Config struct {
 	Server         ServerConfig   `yaml:"server"`
 	Postgres       PostgresConfig `yaml:"postgres"`
 	Projects       ProjectsConfig `yaml:"projects"`
+	Analytics      AnalyticsConfig `yaml:"analytics"`
 	InternalAPIKey string         `yaml:"-"`
 }
 
@@ -36,6 +37,11 @@ type PostgresConfig struct {
 }
 
 type ProjectsConfig struct {
+	GRPCAddress string        `yaml:"grpc_address"`
+	Timeout     time.Duration `yaml:"timeout"`
+}
+
+type AnalyticsConfig struct {
 	GRPCAddress string        `yaml:"grpc_address"`
 	Timeout     time.Duration `yaml:"timeout"`
 }

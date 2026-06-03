@@ -45,3 +45,17 @@ func (c *AnalyticsClient) GetDashboard(ctx context.Context, projectID, period st
 	}
 	return resp, nil
 }
+
+func (c *AnalyticsClient) GetPerformanceGateResult(ctx context.Context, runID, jobName string) (*pb.GetPerformanceGateResultResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
+
+	resp, err := c.client.GetPerformanceGateResult(ctx, &pb.GetPerformanceGateResultRequest{
+		RunId:   runID,
+		JobName: jobName,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("analytics client: GetPerformanceGateResult: %w", err)
+	}
+	return resp, nil
+}

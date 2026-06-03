@@ -79,10 +79,10 @@ func newVaultClient(addr string) (*vault.Client, error) {
 	return nil, fmt.Errorf("vault auth required: set VAULT_TOKEN or VAULT_ROLE_ID+VAULT_SECRET_ID")
 }
 
-func mergeVaultPath(ctx context.Context, client *vault.Client, mount, path string, optional404 bool) error {
+func mergeVaultPath(ctx context.Context, client *vault.Client, mount, path string, optional bool) error {
 	secret, err := client.KVv2(mount).Get(ctx, path)
 	if err != nil {
-		if optional404 && isNotFoundError(err) {
+		if optional && isMissingSecretError(err) {
 			return nil
 		}
 		return err
@@ -107,10 +107,12 @@ func mergeVaultPath(ctx context.Context, client *vault.Client, mount, path strin
 	return nil
 }
 
-func isNotFoundError(err error) bool {
+func isMissingSecretError(err error) bool {
 	if err == nil {
 		return false
 	}
 	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "404") || strings.Contains(msg, "not found")
+	return strings.Contains(msg, "404") ||
+		strings.Contains(msg, "not found") ||
+		strings.Contains(msg, "permission denied")
 }

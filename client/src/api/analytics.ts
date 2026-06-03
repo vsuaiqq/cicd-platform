@@ -38,3 +38,31 @@ export function getDashboard(projectId: string, period: Period, token: string | 
   const params = new URLSearchParams({ project_id: projectId, period })
   return apiRequest<DashboardData>(`${PREFIX}/dashboard?${params}`, { token })
 }
+
+export interface PerformanceGateMetric {
+  name: string
+  direction: string
+  current: number
+  baseline_mean: number
+  baseline_stddev: number
+  threshold: number
+  constant_threshold?: number
+  adaptive_threshold?: number
+  constant_passed: boolean
+  adaptive_passed: boolean
+  adaptive_skipped?: boolean
+  check_mode?: string
+  passed: boolean
+  reason: string
+  cold_start?: boolean
+}
+
+export interface PerformanceGateResult {
+  found: boolean
+  passed: boolean
+  cold_start: boolean
+  baseline_samples: number
+  summary: string
+  metrics: PerformanceGateMetric[]
+  evaluated_at?: string
+}

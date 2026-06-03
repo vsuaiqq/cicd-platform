@@ -1,6 +1,6 @@
-.PHONY: proto clean auth-proto projects-proto ai-proto
+.PHONY: proto clean auth-proto projects-proto ai-proto analytics-proto
 
-proto: auth-proto projects-proto ai-proto
+proto: auth-proto projects-proto ai-proto analytics-proto
 	@echo "All proto files generated successfully!"
 
 auth-proto:
@@ -26,6 +26,14 @@ ai-proto:
 		--go-grpc_out=gen/ai --go-grpc_opt=paths=source_relative \
 		ai.proto
 	@echo "AI proto files generated in gen/ai/"
+
+analytics-proto:
+	@echo "Generating gRPC code for analytics domain..."
+	@mkdir -p gen/analytics
+	@protoc --proto_path=api/analytics --go_out=gen/analytics --go_opt=paths=source_relative \
+		--go-grpc_out=gen/analytics --go-grpc_opt=paths=source_relative \
+		analytics.proto
+	@echo "Analytics proto files generated in gen/analytics/"
 
 clean:
 	@rm -rf gen/

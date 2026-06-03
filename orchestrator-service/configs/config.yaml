@@ -23,3 +23,7 @@ postgres:
 projects:
   grpc_address: "projects-service:50052"
   timeout: 10s
+
+analytics:
+  grpc_address: "analytics-service:50054"
+  timeout: 15s

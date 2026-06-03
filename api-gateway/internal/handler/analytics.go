@@ -91,6 +91,7 @@ func NewAnalyticsHandler(authClient *client.AuthClient, analyticsClient *client.
 
 func (h *AnalyticsHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/analytics/dashboard", h.GetDashboard)
+	r.Get("/analytics/performance-gate", h.GetPerformanceGateResult)
 }
 
 func (h *AnalyticsHandler) GetDashboard(w http.ResponseWriter, r *http.Request) {
@@ -120,4 +121,80 @@ func (h *AnalyticsHandler) GetDashboard(w http.ResponseWriter, r *http.Request) 
 	}
 
 	httputil.JSON(w, http.StatusOK, toDashboardJSON(resp))
+}
+
+type performanceGateMetricJSON struct {
+	Name              string   `json:"name"`
+	Direction         string   `json:"direction"`
+	Current           float64  `json:"current"`
+	BaselineMean      float64  `json:"baseline_mean"`
+	BaselineStddev    float64  `json:"baseline_stddev"`
+	Threshold         float64  `json:"threshold"`
+	ConstantThreshold *float64 `json:"constant_threshold,omitempty"`
+	AdaptiveThreshold *float64 `json:"adaptive_threshold,omitempty"`
+	ConstantPassed    bool     `json:"constant_passed"`
+	AdaptivePassed    bool     `json:"adaptive_passed"`
+	AdaptiveSkipped   bool     `json:"adaptive_skipped,omitempty"`
+	CheckMode         string   `json:"check_mode,omitempty"`
+	Passed            bool     `json:"passed"`
+	Reason            string   `json:"reason"`
+	ColdStart         bool     `json:"cold_start,omitempty"`
+}
+
+type performanceGateResultJSON struct {
+	Found           bool                        `json:"found"`
+	Passed          bool                        `json:"passed"`
+	ColdStart       bool                        `json:"cold_start"`
+	BaselineSamples int32                       `json:"baseline_samples"`
+	Summary         string                      `json:"summary"`
+	Metrics         []performanceGateMetricJSON `json:"metrics"`
+	EvaluatedAt     string                      `json:"evaluated_at,omitempty"`
+}
+
+func (h *AnalyticsHandler) GetPerformanceGateResult(w http.ResponseWriter, r *http.Request) {
+	userID := requireUserID(w, r, h.authClient)
+	if userID == "" {
+		return
+	}
+
+	runID := r.URL.Query().Get("run_id")
+	jobName := r.URL.Query().Get("job_name")
+	if runID == "" || jobName == "" {
+		httputil.Error(w, http.StatusBadRequest, "run_id and job_name are required", nil)
+		return
+	}
+
+	resp, err := h.analyticsClient.GetPerformanceGateResult(r.Context(), runID, jobName)
+	if err != nil {
+		httputil.Error(w, http.StatusBadGateway, "analytics service unavailable", err)
+		return
+	}
+
+	out := performanceGateResultJSON{
+		Found:           resp.Found,
+		Passed:          resp.Passed,
+		ColdStart:       resp.ColdStart,
+		BaselineSamples: resp.BaselineSamples,
+		Summary:         resp.Summary,
+		EvaluatedAt:     resp.EvaluatedAt,
+	}
+	for _, m := range resp.Metrics {
+		item := performanceGateMetricJSON{
+			Name: m.Name, Direction: m.Direction, Current: m.Current,
+			BaselineMean: m.BaselineMean, BaselineStddev: m.BaselineStddev,
+			Threshold: m.Threshold, Passed: m.Passed, Reason: m.Reason, ColdStart: m.ColdStart,
+			ConstantPassed: m.ConstantPassed, AdaptivePassed: m.AdaptivePassed,
+			AdaptiveSkipped: m.AdaptiveSkipped, CheckMode: m.CheckMode,
+		}
+		if m.ConstantThreshold != nil {
+			v := m.GetConstantThreshold()
+			item.ConstantThreshold = &v
+		}
+		if m.AdaptiveThreshold != nil {
+			v := m.GetAdaptiveThreshold()
+			item.AdaptiveThreshold = &v
+		}
+		out.Metrics = append(out.Metrics, item)
+	}
+	httputil.JSON(w, http.StatusOK, out)
 }

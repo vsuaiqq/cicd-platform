@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help setup vault-seed seed up down start restart status health wait logs ui observability build
+.PHONY: help setup bootstrap-vault vault-seed seed up down start restart status health wait logs ui observability build
 
 TOKEN_DIR := docker/vault/tokens
 
@@ -18,14 +18,17 @@ setup: ## Create .env and token dir if missing
 	@test -f .env || cp .env.example .env
 	@mkdir -p $(TOKEN_DIR)
 
-vault-seed: setup ## Seed Vault secrets from .env and refresh service tokens
+bootstrap-vault: setup ## Ensure Vault is up, seeded, and service tokens are fresh
 	docker compose up -d vault
+	docker compose rm -sf vault-init >/dev/null 2>&1 || true
 	docker compose run --rm vault-init
+
+vault-seed: bootstrap-vault ## Seed Vault secrets from .env and refresh service tokens
 
 seed: vault-seed ## Alias for vault-seed
 
-up: vault-seed ## Start all backend services (Docker)
-	docker compose up -d --build --force-recreate
+up: bootstrap-vault ## Start all backend services (Docker)
+	docker compose up -d --build
 
 down: ## Stop all services
 	docker compose down

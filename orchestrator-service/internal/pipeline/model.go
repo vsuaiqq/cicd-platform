@@ -73,6 +73,41 @@ type ArtifactsConfig struct {
 	Download []ArtifactDownload `yaml:"download,omitempty"`
 }
 
+type MetricDirection string
+
+const (
+	MetricLowerIsBetter  MetricDirection = "lower_is_better"
+	MetricHigherIsBetter MetricDirection = "higher_is_better"
+)
+
+type PerformanceMetricRule struct {
+	Name      string          `yaml:"name"`
+	Direction MetricDirection `yaml:"direction,omitempty"`
+	Max       *float64        `yaml:"max,omitempty"`
+	Min       *float64        `yaml:"min,omitempty"`
+}
+
+type PerformanceBaselineConfig struct {
+	WindowDays int    `yaml:"window_days,omitempty"`
+	MinSamples int    `yaml:"min_samples,omitempty"`
+	Branch     string `yaml:"branch,omitempty"`
+}
+
+type PerformanceAdaptiveConfig struct {
+	Enabled          *bool   `yaml:"enabled,omitempty"`
+	SigmaFactor      float64 `yaml:"sigma_factor,omitempty"`
+	MaxRegressionPct float64 `yaml:"max_regression_pct,omitempty"`
+}
+
+// PerformanceGateConfig defines an adaptive performance quality gate job.
+// The orchestrator evaluates this job internally — no runner steps are executed.
+type PerformanceGateConfig struct {
+	SourceJob string                    `yaml:"source_job"`
+	Metrics   []PerformanceMetricRule   `yaml:"metrics,omitempty"`
+	Baseline  PerformanceBaselineConfig `yaml:"baseline,omitempty"`
+	Adaptive  PerformanceAdaptiveConfig `yaml:"adaptive,omitempty"`
+}
+
 type Job struct {
 	Name  string            `yaml:"name"`
 	Image string            `yaml:"image,omitempty"`
@@ -82,6 +117,8 @@ type Job struct {
 
 	Approval ApprovalRequired `yaml:"approval,omitempty"`
 
+	PerformanceGate *PerformanceGateConfig `yaml:"performance_gate,omitempty"`
+
 	Timeout Duration `yaml:"timeout,omitempty"`
 
 	Retry RetryConfig `yaml:"retry,omitempty"`
@@ -89,6 +126,10 @@ type Job struct {
 	Cache *CacheConfig `yaml:"cache,omitempty"`
 
 	Artifacts *ArtifactsConfig `yaml:"artifacts,omitempty"`
+}
+
+func (j *Job) IsPerformanceGate() bool {
+	return j.PerformanceGate != nil
 }
 
 type Step struct {

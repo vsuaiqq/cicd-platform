@@ -357,21 +357,19 @@ function Field({
 }
 
 const STATIC_SECTIONS = [
-  { id: 'overview',      labelKey: 'overview',      group: 'gettingStarted' },
-  { id: 'global',        labelKey: 'global',        group: 'gettingStarted' },
-  { id: 'on',            labelKey: 'on',            group: 'gettingStarted' },
-  { id: 'jobs',          labelKey: 'jobs',          group: 'jobs' },
-  { id: 'job-fields',    labelKey: 'jobFields',     group: 'jobs' },
-  { id: 'steps',         labelKey: 'steps',         group: 'jobs' },
-  { id: 'matrix',        labelKey: 'matrix',        group: 'jobs' },
-  { id: 'cache',         labelKey: 'cache',         group: 'jobs' },
-  { id: 'artifacts',     labelKey: 'artifacts',     group: 'jobs' },
-  { id: 'conditions',    labelKey: 'conditions',    group: 'advanced' },
-  { id: 'environments',  labelKey: 'environments',  group: 'advanced' },
-  { id: 'expressions',   labelKey: 'expressions',   group: 'advanced' },
-  { id: 'secrets',       labelKey: 'secrets',       group: 'advanced' },
-  { id: 'limitations',   labelKey: 'limitations',   group: 'advanced' },
-  { id: 'example',       labelKey: 'example',       group: 'advanced' },
+  { id: 'overview',        labelKey: 'overview',        group: 'gettingStarted' },
+  { id: 'global',          labelKey: 'global',          group: 'gettingStarted' },
+  { id: 'on',              labelKey: 'on',              group: 'gettingStarted' },
+  { id: 'jobs',            labelKey: 'jobs',            group: 'jobs' },
+  { id: 'job-fields',      labelKey: 'jobFields',       group: 'jobs' },
+  { id: 'steps',           labelKey: 'steps',           group: 'jobs' },
+  { id: 'cache',           labelKey: 'cache',           group: 'jobs' },
+  { id: 'artifacts',       labelKey: 'artifacts',       group: 'jobs' },
+  { id: 'load-testing',    labelKey: 'loadTesting',     group: 'quality' },
+  { id: 'performance-gate', labelKey: 'performanceGate', group: 'quality' },
+  { id: 'secrets',         labelKey: 'secrets',         group: 'advanced' },
+  { id: 'limitations',     labelKey: 'limitations',     group: 'advanced' },
+  { id: 'example',         labelKey: 'example',         group: 'advanced' },
 ] as const
 
 function SectionOverview() {
@@ -432,9 +430,6 @@ function SectionGlobal() {
         <Field name="env" type="map[string]string">
           <DocText text={d.fields.env} />
         </Field>
-        <Field name="environments" type="map[string]Environment">
-          <DocText text={d.fields.environments} />
-        </Field>
         <Field name="jobs" type="map[string]Job" required>
           <DocText text={d.fields.jobs} />
         </Field>
@@ -456,64 +451,18 @@ function SectionOn() {
         <Field name="on.push" type="object">
           <DocText text={d.fields.push} />
         </Field>
-        <Field name="on.pull_request" type="object">
-          <DocText text={d.fields.pull_request} />
-        </Field>
-        <Field name="on.manual" type="object">
-          <DocText text={d.fields.manual} />
-        </Field>
-        <Field name="on.schedule" type="ScheduleTrigger[]">
-          <DocText text={d.fields.schedule} />
-        </Field>
-        <Field name="*.branches" type="string[]">
+        <Field name="on.push.branches" type="string[]">
           <DocText text={d.fields.branches} />
-        </Field>
-        <Field name="*.paths" type="string[]">
-          <DocText text={d.fields.paths} />
-        </Field>
-        <Field name="*.paths_ignore" type="string[]">
-          <DocText text={d.fields.paths_ignore} />
-        </Field>
-        <Field name="pull_request.types" type="string[]">
-          <DocText text={d.fields.types} />
-        </Field>
-        <Field name="pull_request.drafts" type="boolean">
-          <DocText text={d.fields.drafts} />
-        </Field>
-        <Field name="manual.inputs" type="map[string]ManualInput">
-          <DocText text={d.fields.inputs} />
-        </Field>
-        <Field name="schedule.cron" type="string">
-          <DocText text={d.fields.cron} />
-        </Field>
-        <Field name="schedule.timezone" type="string">
-          <DocText text={d.fields.timezone} />
         </Field>
       </div>
       <div css={codeBlock}><Y>{`on:
   push:
-    branches: [main, develop]
-    paths: [cmd/**, internal/**, go.mod]
-    paths_ignore: [docs/**]
-  pull_request:
-    branches: [main]
-    types: [opened, synchronize, reopened]
-    drafts: false
-  manual:
-    inputs:
-      environment:
-        description: Target environment
-        default: staging
-        required: true
-  schedule:
-    - cron: "0 9 * * 1-5"
-      branch: main
-    - cron: "30 2 * * *"
-      branch: main
-      timezone: Europe/Amsterdam`}</Y></div>
+    branches:
+      - main
+      - develop`}</Y></div>
       <div css={tipBox}>
         <span style={{ flexShrink: 0 }}>💡</span>
-        <span><DocText text={d.pathTip} /></span>
+        <span><DocText text={d.exampleNote} /></span>
       </div>
     </>
   )
@@ -580,23 +529,8 @@ function SectionJobFields() {
         <Field name="retry" type="integer">
           <DocText text={d.fields.retry} />
         </Field>
-        <Field name="allow_failure" type="boolean">
-          <DocText text={d.fields.allow_failure} />
-        </Field>
-        <Field name="manual" type="boolean">
-          <DocText text={d.fields.manual} />
-        </Field>
         <Field name="approval" type="boolean | required">
           <DocText text={d.fields.approval} />
-        </Field>
-        <Field name="strategy" type="StrategyConfig">
-          <DocText text={d.fields.strategy} />
-        </Field>
-        <Field name="if" type="expression">
-          <DocText text={d.fields.if} />
-        </Field>
-        <Field name="environment" type="string">
-          <DocText text={d.fields.environment} />
         </Field>
         <Field name="cache" type="object">
           <DocText text={d.fields.cache} />
@@ -604,8 +538,11 @@ function SectionJobFields() {
         <Field name="artifacts" type="object">
           <DocText text={d.fields.artifacts} />
         </Field>
-        <Field name="steps" type="Step[]" required>
+        <Field name="steps" type="Step[]">
           <DocText text={d.fields.steps} />
+        </Field>
+        <Field name="performance_gate" type="PerformanceGateConfig">
+          <DocText text={d.fields.performance_gate} />
         </Field>
       </div>
     </>
@@ -628,9 +565,6 @@ function SectionSteps() {
         <Field name="run" type="string" required>
           <DocText text={d.fields.run} />
         </Field>
-        <Field name="env" type="map[string]string">
-          <DocText text={d.fields.env} />
-        </Field>
         <Field name="timeout" type="duration">
           <DocText text={d.fields.timeout} />
         </Field>
@@ -639,9 +573,6 @@ function SectionSteps() {
         </Field>
         <Field name="continue_on_error" type="boolean">
           <DocText text={d.fields.continue_on_error} />
-        </Field>
-        <Field name="if" type="expression">
-          <DocText text={d.fields.if} />
         </Field>
       </div>
       <div css={codeBlock}><Y>{`steps:
@@ -657,133 +588,112 @@ function SectionSteps() {
   )
 }
 
-function SectionMatrix() {
+function SectionLoadTesting() {
   const { t } = useI18n()
-  const d = t.helpDocs.matrix
+  const d = t.helpDocs.loadTesting
+  return (
+    <>
+      <h2 css={sectionTitle}><IconZap />{d.title}</h2>
+      <p css={sectionDesc}><DocText text={d.desc} /></p>
+      <div css={fieldGrid}>
+        <Field name=".flow/perf-metrics.json" type="file">
+          <DocText text={d.fields.metricsFile} />
+        </Field>
+        <Field name="format" type="JSON">
+          <DocText text={d.fields.format} />
+        </Field>
+        <Field name="metrics.*" type="number">
+          <DocText text={d.fields.exampleMetrics} />
+        </Field>
+      </div>
+      <div css={codeBlock}><Y>{`{
+  "version": 1,
+  "tool": "curl-load",
+  "metrics": {
+    "http_req_duration_p95": 142.5,
+    "http_req_duration_avg": 87.3,
+    "http_reqs": 200,
+    "http_req_failed_rate": 0.0
+  }
+}`}</Y></div>
+      <div css={codeBlock}><Y>{`load-test:
+  name: Load Test
+  image: golang:1.25
+  needs: [deploy-staging]
+  steps:
+    - name: Run load test
+      run: sh scripts/load-test.sh`}</Y></div>
+      <div css={tipBox}>
+        <span style={{ flexShrink: 0 }}>💡</span>
+        <span><DocText text={d.tip} /></span>
+      </div>
+      <p css={sectionDesc}><DocText text={d.exampleNote} /></p>
+    </>
+  )
+}
+
+function SectionPerformanceGate() {
+  const { t } = useI18n()
+  const d = t.helpDocs.performanceGate
   return (
     <>
       <h2 css={sectionTitle}><IconPipeline />{d.title}</h2>
-      <p css={sectionDesc}>{d.desc}</p>
+      <p css={sectionDesc}><DocText text={d.desc} /></p>
       <div css={fieldGrid}>
-        <Field name="strategy.matrix" type="map[string][]string">
-          <DocText text={d.fields.matrix} />
+        <Field name="performance_gate.source_job" type="string" required>
+          <DocText text={d.fields.source_job} />
         </Field>
-        <Field name="strategy.include" type="map[string]string[]">
-          <DocText text={d.fields.include} />
+        <Field name="performance_gate.metrics[]" type="MetricRule[]">
+          <DocText text={d.fields.metrics} />
         </Field>
-        <Field name="strategy.exclude" type="map[string]string[]">
-          <DocText text={d.fields.exclude} />
+        <Field name="performance_gate.baseline.window_days" type="integer">
+          <DocText text={d.fields.baseline_window_days} />
         </Field>
-        <Field name="strategy.fail_fast" type="boolean">
-          <DocText text={d.fields.fail_fast} />
+        <Field name="performance_gate.baseline.min_samples" type="integer">
+          <DocText text={d.fields.baseline_min_samples} />
+        </Field>
+        <Field name="performance_gate.baseline.branch" type="string">
+          <DocText text={d.fields.baseline_branch} />
+        </Field>
+        <Field name="performance_gate.adaptive.enabled" type="boolean">
+          <DocText text={d.fields.adaptive_enabled} />
+        </Field>
+        <Field name="performance_gate.adaptive.sigma_factor" type="number">
+          <DocText text={d.fields.adaptive_sigma_factor} />
+        </Field>
+        <Field name="performance_gate.adaptive.max_regression_pct" type="number">
+          <DocText text={d.fields.adaptive_max_regression_pct} />
         </Field>
       </div>
-      <div css={codeBlock}><Y>{`test:
-  image: golang:\${{ matrix.go }}-\${{ matrix.os }}
-  strategy:
-    fail_fast: true
-    matrix:
-      go: ["1.22", "1.23"]
-      os: [alpine, bookworm]
-    exclude:
-      - { go: "1.22", os: bookworm }
-  env:
-    LABEL: "\${{ matrix.go }}-\${{ matrix.os }}"
-  steps:
-    - name: Test
-      run: go test ./...`}</Y></div>
+      <div css={codeBlock}><Y>{`performance-gate:
+  name: Performance Quality Gate
+  needs: [load-test]
+  performance_gate:
+    source_job: load-test
+    metrics:
+      - name: http_req_duration_p95
+        direction: lower_is_better
+        max: 500
+      - name: http_reqs
+        direction: higher_is_better
+        min: 100
+    baseline:
+      window_days: 30
+      min_samples: 3
+    adaptive:
+      enabled: true
+      sigma_factor: 2.0
+      max_regression_pct: 15`}</Y></div>
       <div css={tipBox}>
         <span style={{ flexShrink: 0 }}>💡</span>
-        <span><DocText text={d.tip} /></span>
+        <span><DocText text={d.adaptiveFormula} /></span>
       </div>
-    </>
-  )
-}
-
-function SectionConditions() {
-  const { t } = useI18n()
-  const d = t.helpDocs.conditions
-  return (
-    <>
-      <h2 css={sectionTitle}><IconCode />{d.title}</h2>
-      <p css={sectionDesc}>{d.desc}</p>
-      <div css={fieldGrid}>
-        <Field name="literals" type="syntax">
-          <DocText text={d.fields.literals} />
-        </Field>
-        <Field name="context" type="variables">
-          <DocText text={d.fields.context} />
-        </Field>
-        <Field name="functions" type="syntax">
-          <DocText text={d.fields.functions} />
-        </Field>
-      </div>
-      <div css={codeBlock}><Y>{`deploy:
-  needs: [build, test]
-  if: branch == 'main' && event != 'pull_request'
-  steps:
-    - name: Deploy
-      run: ./deploy.sh
-    - name: On success
-      if: success()
-      run: echo deployed
-    - name: Cleanup
-      if: always()
-      run: echo done`}</Y></div>
       <div css={warnBox}>
         <span style={{ flexShrink: 0, marginTop: 1 }}>⚠️</span>
-        <span><DocText text={d.warn} /></span>
+        <span><DocText text={d.coldStart} /></span>
       </div>
-    </>
-  )
-}
-
-function SectionEnvironments() {
-  const { t } = useI18n()
-  const d = t.helpDocs.environments
-  return (
-    <>
-      <h2 css={sectionTitle}><IconGlobe />{d.title}</h2>
-      <p css={sectionDesc}>{d.desc}</p>
-      <div css={fieldGrid}>
-        <Field name="url" type="string">
-          <DocText text={d.fields.url} />
-        </Field>
-        <Field name="protection.branches" type="string[]">
-          <DocText text={d.fields.branches} />
-        </Field>
-        <Field name="protection.wait_timer" type="duration">
-          <DocText text={d.fields.wait_timer} />
-        </Field>
-        <Field name="protection.required_reviewers" type="string[]">
-          <DocText text={d.fields.required_reviewers} />
-        </Field>
-        <Field name="protection.reviewer_count" type="integer">
-          <DocText text={d.fields.reviewer_count} />
-        </Field>
-      </div>
-      <div css={codeBlock}><Y>{`environments:
-  staging:
-    url: https://staging.example.com
-  production:
-    url: https://app.example.com
-    protection:
-      branches: [main]
-      wait_timer: 5m
-      required_reviewers: [alice, bob]
-      reviewer_count: 1
-
-jobs:
-  deploy:
-    environment: production
-    manual: true
-    steps:
-      - name: Deploy
-        run: curl -X POST "$DEPLOY_URL/release"`}</Y></div>
-      <div css={tipBox}>
-        <span style={{ flexShrink: 0 }}>💡</span>
-        <span><DocText text={d.tip} /></span>
-      </div>
+      <p css={sectionDesc}><DocText text={d.uiNote} /></p>
+      <p css={sectionDesc}><DocText text={d.defaultMetrics} /></p>
     </>
   )
 }
@@ -850,42 +760,6 @@ deploy:
   )
 }
 
-function SectionExpressions() {
-  const { t } = useI18n()
-  const d = t.helpDocs.expressions
-  return (
-    <>
-      <h2 css={sectionTitle}><IconCode />{d.title}</h2>
-      <p css={sectionDesc}>
-        <DocText text={d.desc} />
-      </p>
-      <div css={fieldGrid}>
-        <Field name={'${{ checksum "path" }}'} type="string">
-          <DocText text={d.fields.checksum} />
-        </Field>
-        <Field name="${{ branch }}" type="string">
-          <DocText text={d.fields.branch} />
-        </Field>
-        <Field name="${{ sha }}" type="string">
-          <DocText text={d.fields.sha} />
-        </Field>
-        <Field name={'${{ secrets.NAME }}'} type="string">
-          <DocText text={d.fields.secrets} />
-        </Field>
-        <Field name={'${{ matrix.KEY }}'} type="string">
-          <DocText text={d.fields.matrix} />
-        </Field>
-      </div>
-      <div css={codeBlock}><Y>{`env:
-  DATABASE_URL: \${{ secrets.DATABASE_URL }}
-  LABEL: "\${{ matrix.go }}-\${{ matrix.os }}"
-
-cache:
-  key: npm-\${{ branch }}-\${{ checksum "package-lock.json" }}`}</Y></div>
-    </>
-  )
-}
-
 function SectionSecrets() {
   const { t } = useI18n()
   const d = t.helpDocs.secrets
@@ -898,6 +772,12 @@ function SectionSecrets() {
           <li key={i}><DocText text={item} /></li>
         ))}
       </ol>
+      <p css={[sectionDesc, { fontWeight: 600, color: 'var(--text-primary)' }]}>{d.interpolationTitle}</p>
+      <ul style={{ paddingLeft: 20, color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: 1.85, marginBottom: 20 }}>
+        {d.interpolationList.map((item, i) => (
+          <li key={i}><DocText text={item} /></li>
+        ))}
+      </ul>
       <div css={warnBox}>
         <span style={{ flexShrink: 0, marginTop: 1 }}>⚠️</span>
         <span>
@@ -911,12 +791,10 @@ env:
 jobs:
   deploy:
     env:
-      # Interpolate a secret into an env var for this job
       DEPLOY_TOKEN: \${{ secrets.DEPLOY_TOKEN }}
     steps:
       - name: Deploy
         run: |
-          # Secret is also available directly as $DEPLOY_TOKEN
           curl -H "Authorization: Bearer $DEPLOY_TOKEN" \\
                https://api.example.com/deploy`}</Y></div>
     </>
@@ -946,71 +824,78 @@ function SectionExample() {
     <>
       <h2 css={sectionTitle}><IconStar />{d.title}</h2>
       <p css={sectionDesc}>{d.desc}</p>
-      <div css={codeBlock}><Y>{`name: Build, Test & Deploy
+      <div css={codeBlock}><Y>{`name: hello-server CI/CD
 
 on:
   push:
-    branches: [main, develop]
-    paths: [cmd/**, go.mod, go.sum]
-    paths_ignore: [docs/**]
-  pull_request:
-    branches: [main]
-  manual:
-    inputs:
-      environment:
-        description: Target environment
-        default: staging
-  schedule:
-    - cron: "0 9 * * 1-5"
-      branch: main
+    branches:
+      - main
 
-environments:
-  staging:
-    url: https://staging.example.com
-  production:
-    url: https://app.example.com
-    protection:
-      branches: [main]
-      wait_timer: 5m
-      required_reviewers: [alice]
+env:
+  APP_NAME: hello-server
 
 jobs:
   lint:
-    image: golang:1.22
+    image: golang:1.25
     steps:
-      - name: Lint
-        run: golangci-lint run ./...
+      - name: go vet
+        run: go vet ./...
 
   test:
-    image: golang:\${{ matrix.go }}
     needs: [lint]
-    strategy:
-      matrix:
-        go: ["1.22", "1.23"]
+    image: golang:1.25
     steps:
-      - name: Test
-        run: go test ./...
+      - name: Unit tests
+        run: go test -v ./...
 
   build:
     needs: [test]
-    image: golang:1.22
+    image: golang:1.25
     artifacts:
       paths: [./bin/]
     steps:
-      - name: Build
-        run: go build -o ./bin/app ./cmd/...
+      - name: Compile
+        run: go build -o bin/$APP_NAME ./cmd/server/
 
-  deploy:
+  deploy-staging:
     needs: [build]
-    environment: production
-    if: branch == 'main' && event != 'pull_request'
-    manual: true
-    artifacts:
-      download:
-        - job: build
+    image: alpine:3.19
     steps:
-      - name: Deploy
-        run: echo "deploy to $DEPLOY_URL"`}</Y></div>
+      - name: Deploy staging
+        run: echo "Deploying $APP_NAME to staging..."
+
+  load-test:
+    needs: [deploy-staging]
+    image: golang:1.25
+    steps:
+      - name: Run load test
+        run: sh scripts/load-test.sh
+
+  performance-gate:
+    needs: [load-test]
+    performance_gate:
+      source_job: load-test
+      metrics:
+        - name: http_req_duration_p95
+          direction: lower_is_better
+          max: 500
+        - name: http_reqs
+          direction: higher_is_better
+          min: 100
+      baseline:
+        window_days: 30
+        min_samples: 3
+      adaptive:
+        enabled: true
+        sigma_factor: 2.0
+        max_regression_pct: 15
+
+  deploy-production:
+    needs: [performance-gate]
+    image: alpine:3.19
+    steps:
+      - name: Deploy production
+        run: echo "Deploying $APP_NAME to production..."`}</Y></div>
     </>
   )
 }
@@ -1036,17 +921,11 @@ function IconBox() {
 function IconPaperclip() {
   return <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden><path d="M13 7L7.5 12.5a3.5 3.5 0 01-5-5l7-7a2 2 0 013 3l-6.5 6.5a.5.5 0 01-.7-.7L10 5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
 }
-function IconCode() {
-  return <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden><path d="M5 4L1 8l4 4M11 4l4 4-4 4M9 2l-2 12" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-}
 function IconLock() {
   return <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden><rect x="3" y="7" width="10" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.2" /><path d="M5.5 7V5a2.5 2.5 0 015 0v2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" /><circle cx="8" cy="11" r="1" fill="currentColor" /></svg>
 }
 function IconStar() {
   return <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden><path d="M8 2l1.5 3.5L13 6l-2.5 2.5.5 3.5L8 10.5 5 12l.5-3.5L3 6l3.5-.5L8 2z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" /></svg>
-}
-function IconGlobe() {
-  return <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden><circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.2" /><path d="M2 8h12M8 2c2 2 2 10 0 12M8 2C6 4 6 12 8 14" stroke="currentColor" strokeWidth="1.2" /></svg>
 }
 function IconAlert() {
   return <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden><path d="M8 2l6.5 11H1.5L8 2z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" /><path d="M8 6v3.5M8 11.5v.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" /></svg>
@@ -1058,21 +937,19 @@ interface HelpDocsModalProps {
 }
 
 const SECTION_MAP: Record<string, React.ReactNode> = {
-  overview:      <SectionOverview />,
-  global:        <SectionGlobal />,
-  on:            <SectionOn />,
-  jobs:          <SectionJobs />,
-  'job-fields':  <SectionJobFields />,
-  steps:         <SectionSteps />,
-  matrix:        <SectionMatrix />,
-  cache:         <SectionCache />,
-  artifacts:     <SectionArtifacts />,
-  conditions:    <SectionConditions />,
-  environments:  <SectionEnvironments />,
-  expressions:   <SectionExpressions />,
-  secrets:       <SectionSecrets />,
-  limitations:   <SectionLimitations />,
-  example:       <SectionExample />,
+  overview:         <SectionOverview />,
+  global:           <SectionGlobal />,
+  on:               <SectionOn />,
+  jobs:             <SectionJobs />,
+  'job-fields':     <SectionJobFields />,
+  steps:            <SectionSteps />,
+  cache:            <SectionCache />,
+  artifacts:        <SectionArtifacts />,
+  'load-testing':   <SectionLoadTesting />,
+  'performance-gate': <SectionPerformanceGate />,
+  secrets:          <SectionSecrets />,
+  limitations:      <SectionLimitations />,
+  example:          <SectionExample />,
 }
 
 export default function HelpDocsModal({ open, onClose }: HelpDocsModalProps) {

@@ -120,5 +120,24 @@ func (c *JobResultConsumer) Handle(ctx context.Context, msg *sharedKafka.Message
 		logger.L().Error().Err(err).Msg("insert job event error")
 		return err
 	}
+
+	if len(result.PerformanceMetrics) > 0 && result.Status == "success" {
+		var records []*db.PerformanceMetricRecord
+		for _, m := range result.PerformanceMetrics {
+			records = append(records, &db.PerformanceMetricRecord{
+				ProjectID:  result.ProjectID,
+				RunID:      result.RunID,
+				JobName:    result.JobName,
+				Branch:     result.Branch,
+				MetricName: m.Name,
+				Value:      m.Value,
+				CreatedAt:  createdAt,
+			})
+		}
+		if err := c.repo.InsertPerformanceMetrics(ctx, records); err != nil {
+			logger.L().Error().Err(err).Msg("insert performance metrics error")
+			return err
+		}
+	}
 	return nil
 }

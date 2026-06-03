@@ -125,9 +125,19 @@ func main() {
 	projectsClient := pb.NewProjectsServiceClient(projConn)
 	log.Info().Msg("connected to projects-service")
 
+	analyticsTimeout := cfg.Analytics.Timeout
+	if analyticsTimeout == 0 {
+		analyticsTimeout = 15 * time.Second
+	}
+	perfGate, err := orchestrator.NewAnalyticsGateClient(cfg.Analytics.GRPCAddress, analyticsTimeout)
+	if err != nil {
+		log.Fatal().Err(err).Msg("analytics gate client failed")
+	}
+	log.Info().Msg("connected to analytics-service (performance gate)")
+
 	hub := orchWs.NewHub()
 
-	orch := orchestrator.New(repo, jobPub, cancelPub, runEventPub, projectsClient, hub)
+	orch := orchestrator.New(repo, jobPub, cancelPub, runEventPub, projectsClient, perfGate, hub)
 
 	gitConsumerClient, err := sharedKafka.NewConsumer(sharedKafka.Config{
 		Brokers:  cfg.Kafka.Brokers,

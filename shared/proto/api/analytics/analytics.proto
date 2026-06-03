@@ -7,6 +7,10 @@ option go_package = "github.com/vsuaiqq/cicd/shared/proto/gen/analytics";
 service AnalyticsService {
 
   rpc GetDashboard(DashboardRequest) returns (DashboardResponse);
+
+  rpc EvaluatePerformanceGate(EvaluatePerformanceGateRequest) returns (EvaluatePerformanceGateResponse);
+
+  rpc GetPerformanceGateResult(GetPerformanceGateResultRequest) returns (GetPerformanceGateResultResponse);
 }
 
 message DashboardRequest {
@@ -48,4 +52,83 @@ message DashboardResponse {
   repeated JobStat    top_slow_jobs    = 11;
 
   repeated JobStat    flaky_jobs       = 12;
+}
+
+message PerformanceMetricInput {
+  string name  = 1;
+  double value = 2;
+}
+
+message PerformanceMetricRule {
+  string name      = 1;
+  string direction = 2;
+  optional double max = 3;
+  optional double min = 4;
+}
+
+message PerformanceBaselineConfig {
+  int32  window_days = 1;
+  int32  min_samples = 2;
+  string branch      = 3;
+}
+
+message PerformanceAdaptiveConfig {
+  bool enabled = 1;
+  double sigma_factor       = 2;
+  double max_regression_pct = 3;
+}
+
+message EvaluatePerformanceGateRequest {
+  string project_id   = 1;
+  string run_id       = 2;
+  string job_name       = 3;
+  string source_job     = 4;
+  string branch         = 5;
+  string commit_sha     = 6;
+
+  repeated PerformanceMetricInput current_metrics = 7;
+  repeated PerformanceMetricRule  metric_rules    = 8;
+  PerformanceBaselineConfig       baseline        = 9;
+  PerformanceAdaptiveConfig       adaptive        = 10;
+}
+
+message PerformanceMetricVerdict {
+  string name             = 1;
+  string direction        = 2;
+  double current          = 3;
+  double baseline_mean    = 4;
+  double baseline_stddev  = 5;
+  double threshold        = 6;
+  bool   passed           = 7;
+  string reason           = 8;
+  bool   cold_start       = 9;
+  optional double constant_threshold = 10;
+  optional double adaptive_threshold = 11;
+  bool constant_passed  = 12;
+  bool adaptive_passed  = 13;
+  bool adaptive_skipped = 14;
+  string check_mode     = 15;
+}
+
+message EvaluatePerformanceGateResponse {
+  bool   passed            = 1;
+  bool   cold_start          = 2;
+  int32  baseline_samples  = 3;
+  string summary           = 4;
+  repeated PerformanceMetricVerdict metrics = 5;
+}
+
+message GetPerformanceGateResultRequest {
+  string run_id   = 1;
+  string job_name = 2;
+}
+
+message GetPerformanceGateResultResponse {
+  bool   found              = 1;
+  bool   passed             = 2;
+  bool   cold_start         = 3;
+  int32  baseline_samples   = 4;
+  string summary            = 5;
+  repeated PerformanceMetricVerdict metrics = 6;
+  string evaluated_at       = 7;
 }
